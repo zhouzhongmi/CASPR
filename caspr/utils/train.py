@@ -50,11 +50,14 @@ def run_autoencoder(autoenc, optimizer, dataloader_train, criterion, device):
 
         if count % 64 == 0:
             logger.info(loss, count*seq_cat_data.shape[0])
+            print(loss, count*seq_cat_data.shape[0])
             time_so_far = time.time() - epoch_start_time
             logger.info("Time taken since start:" + str(time_so_far))
+            print("Time taken since start:" + str(time_so_far))
 
     epoch_end_time = time.time()
     logger.info(epoch_end_time - epoch_start_time)
+    print(epoch_end_time - epoch_start_time)
 
     return running_loss, epoch_end_time - epoch_start_time
 
@@ -74,6 +77,7 @@ def run_autoencoder_val(autoenc, dataloader_val, criterion, device):
 
         if count % 64 == 0:
             logger.info(loss, count*seq_cat_data.shape[0])
+            print(loss, count*seq_cat_data.shape[0])
 
     return running_loss
 
@@ -113,12 +117,18 @@ def run_epoch(model, epoch, dataloader, criterion, device, optimizer=None, is_tr
             optimizer.step()
 
     if get_outputs:
+        print("y_labels.type, y_preds.type", type(y_labels), type(y_preds))
+        print("y_labels.len, y_preds.len", len(y_labels), len(y_preds))
+        print("y_labels.type.0, y_preds.type.0", type(y_labels[0]), type(y_preds[0]))
+        print("y_preds.len.0", len(y_preds[0]))
+        # print("y_labels.shape, y_preds.shape", y_labels.shape, y_preds.shape)
         y_labels = torch.cat(y_labels, 0).detach().cpu().numpy()
-        y_preds = torch.cat(y_preds, 0).detach().cpu().numpy()
+        # y_preds = torch.cat(y_preds, 0).detach().cpu().numpy()
 
     mean_loss = np.mean(np.asarray(losses))
     mode = 'training' if is_train else 'validation'
     logger.info("Average {} loss in epoch {} is {}".format(mode, epoch, mean_loss))
+    print("Average {} loss in epoch {} is {}".format(mode, epoch, mean_loss))
     return y_labels, y_preds, mean_loss
 
 
@@ -136,7 +146,7 @@ def init_lr_schedulers(optimizer, warmup_epochs, reduce_mode='min', reduce_facto
 
 
 def train_model(model, criterion, num_epochs, dataloader_train, dataloader_val, device, save_path, lr=1e-3, fix_module_names=None,
-                should_decrease=True, patience=8, verbose=True, evaluate_downstream=False, rank=0, world_size=1, warmup_epochs=5, save_onnx=False):
+                should_decrease=True, patience=10, verbose=True, evaluate_downstream=False, rank=0, world_size=1, warmup_epochs=5, save_onnx=False):
 
     if isinstance(model, (LSTMAutoencoder, AutoencoderTeacherTraining, TransformerAutoEncoder)) and evaluate_downstream:
         raise ValueError('evaluate_downstream should be set to False when training autoencoder')
@@ -158,6 +168,7 @@ def train_model(model, criterion, num_epochs, dataloader_train, dataloader_val, 
         early_stopping = EarlyStopping(logger, should_decrease, patience, verbose, save_onnx=save_onnx)
 
     for epoch in range(num_epochs):
+        print('epoch: ', epoch)
         start = time.time()
 
         model.train()
@@ -177,6 +188,8 @@ def train_model(model, criterion, num_epochs, dataloader_train, dataloader_val, 
             end = time.time()
             logger.info("Time for epoch {0} is {1}\n".format(epoch, (end - start)))
             logger.info("Mean validation loss for epoch {0} is {1}\n".format(epoch, mean_val_loss))
+            print("Time for epoch {0} is {1}\n".format(epoch, (end - start)))
+            print("Mean validation loss for epoch {0} is {1}\n".format(epoch, mean_val_loss))
 
             if epoch <= warmup_epochs:
                 scheduler_wu.step()
@@ -185,6 +198,7 @@ def train_model(model, criterion, num_epochs, dataloader_train, dataloader_val, 
             early_stopping(mean_val_loss, model, save_path)
             if early_stopping.early_stop:
                 logger.info('early stopping at epoch {}'.format(epoch))
+                print('early stopping at epoch {}'.format(epoch))
                 break
 
     if rank == 0:
@@ -252,6 +266,7 @@ def train_model_ddp(caspr_factory : CASPRFactory, caspr_arch : str, hyper_params
 
     """
     logger.info("Setting up model training using torch DDP")
+    print("Setting up model training using torch DDP")
 
     for arg in [caspr_factory, caspr_arch, ds_train, ds_val, criterion, num_epochs, batch_size, save_path, lr]:
         if not arg:
@@ -263,10 +278,12 @@ def train_model_ddp(caspr_factory : CASPRFactory, caspr_arch : str, hyper_params
         device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.warn("DDP mode disabled. Training on %s..." % device)
         model = caspr_factory.create(caspr_arch, device=device, **hyper_params)
+        model.load_state_dict(torch.load("/home/xin.xue/shared/MI_ZHOU/transformer/CASPR/caspr_transformer_paper"))
         train_loader, val_loader = init_loaders(ds_train, ds_val, batch_size, num_workers=STD_LOAD_WORKERS)
         return train_model(model, criterion, num_epochs, train_loader, val_loader, device, save_path, lr, **kwargs)
 
     logger.info("DDP mode enabled, will train on %d GPUs" % world_size)
+    print("DDP mode enabled, will train on %d GPUs" % world_size)
 
     arguments = locals()
 
@@ -328,8 +345,10 @@ if __name__ == '__main__':
     hyper_params = dict()
     output_col = "is_churn"
     seq_len = 15
-    df_train = pd.read_csv("/home/mi.zhou/shared/MI_ZHOU/transformer/df_train_201702.csv")
-    df_val = pd.read_csv("/home/mi.zhou/shared/MI_ZHOU/transformer/df_val_201702.csv")
+    df_train = pd.read_csv("/home/xin.xue/shared/MI_ZHOU/transformer/data/df_train_201602_201702.csv")
+    df_val = pd.read_csv("/home/xin.xue/shared/MI_ZHOU/transformer/data/df_val_201602_201702.csv")
+    # df_train = pd.read_csv("/home/xin.xue/shared/MI_ZHOU/transformer/data/df_train_201602_201607.csv")
+    # df_val = pd.read_csv("/home/xin.xue/shared/MI_ZHOU/transformer/data/df_val_201602_201607.csv")
     
     ds_val = CommonDataset(df_val, seq_cols_, non_seq_cols_, output_col, cat_cols_, cont_cols_, seq_len)
     ds_train = CommonDataset(df_train, seq_cols_, non_seq_cols_, output_col, cat_cols_, cont_cols_, seq_len)
@@ -337,9 +356,10 @@ if __name__ == '__main__':
     # ds_train = init_datasets(df_train, seq_cols_, non_seq_cols_, output_col, cat_cols_, cont_cols_, seq_len)
     # ds_val = init_datasets(df_val, seq_cols_, non_seq_cols_, output_col, cat_cols_, cont_cols_, seq_len)
     criterion = [nn.MSELoss(), nn.CrossEntropyLoss()]
-    num_epochs = 100
-    batch_size = 1024
-    save_path = "./caspr_result.txt"
+    num_epochs = 1
+    # batch_size = 10240
+    batch_size = 5120
+    save_path = "./caspr_transformer_paper"
 
     train_model_ddp(caspr_factory, caspr_arch, hyper_params, ds_train, ds_val, criterion, num_epochs, batch_size,
                     save_path)

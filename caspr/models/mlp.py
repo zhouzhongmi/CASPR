@@ -13,13 +13,19 @@ class MLP(nn.Module): # noqa: W0223
                  lin_layer_sizes,
                  lin_layer_dropouts,
                  output_size,
-                 use_sigmoid=False):
+                 use_sigmoid=False, use_softmax=True):
         """Initialize model with params."""
 
         super().__init__()
 
         self.output_size = output_size
         self.use_sigmoid = use_sigmoid
+        self.use_softmax = use_softmax
+        if self.use_softmax:
+            self.use_sigmoid = False
+            self.activation_fn = nn.Softmax()
+        else:
+            self.activation_fn = nn.Sigmoid()
 
         # final linear layers just before prediction
         self.dense_bn_dropout = DenseBnDropout(
@@ -33,8 +39,8 @@ class MLP(nn.Module): # noqa: W0223
         """Run a forward pass of model over the data."""
         inp = self.dense_bn_dropout(inp)
         out = self.output_layer(inp)
-        if self.use_sigmoid:
-            # out = torch.sigmoid(out)
-            torch.nn.Sigmoid
-            out = torch.softmax(out, dim=0)
+        # if self.use_sigmoid:
+        #     out = torch.sigmoid(out)
+        if self.use_softmax:
+            out = self.activation_fn(out)
         return out

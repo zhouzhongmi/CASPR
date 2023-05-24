@@ -312,7 +312,18 @@ class TransformerChurnModel(nn.Module):  # noqa: W0223
         data = (seq_cat_data, seq_cont_data, non_seq_cat_data, non_seq_cont_data)
         nonempty_tensors, nonempty_idx = get_nonempty_tensors(data)
         y_pred = self(*nonempty_tensors, nonempty_idx)
-        loss = criterion(y_pred.flatten(), y)
+        # print("type(y_pred), type(y): ", type(y_pred), type(y))
+        # if type(y_pred) == 'list':
+        #     print("len(y_pred): ", len(y_pred))
+        # else:
+        #     print("shape(y_pred): ", y_pred.shape)
+        # if type(y) == 'list':
+        #     print("len(y): ", len(y))
+        # else:
+        #     print("shape(y): ", y.shape)
+        # print(y_pred[:10, :], y_pred[:10, :].sum(axis=1), y[:10])
+        # loss = criterion(y_pred.flatten(), y)
+        loss = criterion(y_pred, y.long())
         return y_pred, loss
 
 

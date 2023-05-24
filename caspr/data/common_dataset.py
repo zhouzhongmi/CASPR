@@ -44,13 +44,21 @@ class CommonDataset(torch.utils.data.Dataset):
         df = pd.concat([cont_df, cat_df], axis=1)
         return cls(df, seq_cols, non_seq_cols, [], cat_cols, cont_cols, time_steps, tgt_id=[])
 
+#     def __getitem__(self, index):
+#         if index >= self.seq_catX.shape[0]:
+#             index = index % self.seq_catX.shape[0]
+#         return [self.tgt_id[index * self.time_steps], self.y[index * self.time_steps], self.seq_catX[index], self.seq_contX[index], self.non_seq_catX[index * self.time_steps], self.non_seq_contX[index * self.time_steps]]
+
+#     def __len__(self):
+#         return self.len
+    
     def __getitem__(self, index):
         if index >= self.seq_catX.shape[0]:
             index = index % self.seq_catX.shape[0]
-        return [self.tgt_id[index * self.time_steps], self.y[index * self.time_steps], self.seq_catX[index], self.seq_contX[index], self.non_seq_catX[index * self.time_steps], self.non_seq_contX[index * self.time_steps]]
+        return [self.tgt_id[index], self.y[index], self.seq_catX[index], self.seq_contX[index], self.non_seq_catX[index], self.non_seq_contX[index]]
 
     def __len__(self):
-        return self.len
+        return int(self.len / self.time_steps)
 
 
 def id_collate(batch):
