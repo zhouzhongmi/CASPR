@@ -160,5 +160,6 @@ class CASPRFactory:
         constructor_f = self.support[architecture]
 
         logger.info("Initializing CASPR with %s architecture. Hyperparams provided: %s" % (architecture, hyperparams))
+        print("Initializing CASPR with %s architecture. Hyperparams provided: %s" % (architecture, hyperparams))
 
         return constructor_f(device, **hyperparams)

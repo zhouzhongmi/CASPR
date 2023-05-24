@@ -34,5 +34,7 @@ class MLP(nn.Module): # noqa: W0223
         inp = self.dense_bn_dropout(inp)
         out = self.output_layer(inp)
         if self.use_sigmoid:
-            out = torch.sigmoid(out)
+            # out = torch.sigmoid(out)
+            torch.nn.Sigmoid
+            out = torch.softmax(out, dim=0)
         return out

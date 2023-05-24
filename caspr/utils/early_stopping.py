@@ -37,6 +37,7 @@ class EarlyStopping:
         self.save_onnx = save_onnx
         if self.save_onnx:
             register_custom_op()
+        print("EarlyStopping.__init__ called")
 
     def __call__(self, val_score, model, path):
         """Define __call__ method.
@@ -46,6 +47,7 @@ class EarlyStopping:
             model (nn.Module): Model being trained.
             path (str): Model save path.
         """
+        print("EarlyStopping.__call__ called")
 
         if self.should_decrease:
             val_score = -val_score
@@ -64,6 +66,7 @@ class EarlyStopping:
             self.counter = 0
 
     def save(self, model, path):
+        print("EarlyStopping.save called")
         if self.save_onnx:
             export_onnx(model, path)
         else:
@@ -74,7 +77,7 @@ class EarlyStopping:
 
         The model parameter can be a list that allows multiple models to be saved.
         """
-
+        print("EarlyStopping.save_checkpoint called")
         if self.verbose:
             self.logger.info('Validation score improved.  Saving model ...\n')
         if not isinstance(model, list):

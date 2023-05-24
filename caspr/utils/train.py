@@ -5,13 +5,16 @@ import os
 import time
 
 import numpy as np
+import pandas as pd
 import torch
+import torch.nn as nn
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch import optim
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from caspr.data.load import init_loaders
+from caspr.data.common_dataset import CommonDataset
 from caspr.models.factory import CASPRFactory
 from caspr.models.model_wrapper import AutoencoderTeacherTraining, LSTMAutoencoder, TransformerAutoEncoder
 from caspr.utils.early_stopping import DistributedEarlyStopping, EarlyStopping
@@ -93,9 +96,11 @@ def run_epoch(model, epoch, dataloader, criterion, device, optimizer=None, is_tr
         non_seq_cat_x = non_seq_cat_x.to(device)
         non_seq_cont_x = non_seq_cont_x.to(device)
         y = y.to(device)
-
+        key_pad_mask = ~torch.isnan(seq_cont_x[:, :, 0])
+        key_pad_mask = key_pad_mask.reshape(key_pad_mask.shape[0], 1, 1, key_pad_mask.shape[1])
         # Forward Pass
-        y_pred, loss = model.run(y, seq_cat_x, seq_cont_x, non_seq_cat_x, non_seq_cont_x, criterion=criterion)
+        y_pred, loss = model.run(y, seq_cat_x, seq_cont_x, non_seq_cat_x, non_seq_cont_x, criterion=criterion,
+                                 pad_mask=key_pad_mask)
         losses.append(loss.detach().cpu().numpy())
 
         if get_outputs:
@@ -285,3 +290,56 @@ def test_model(model, dataloader_test, criterion, device):
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+if __name__ == '__main__':
+    # categorical columns
+    cat_cols_ = ['city', 'gender', 'registered_via']
+    # num_activities: key, categorical columns in seq_cols_ + non_seq_cols_; value: unique categorical num
+    # embedding层需检查张量内部具体值的大小，并确保它们的值在有效范围内[0, num_embeddings-1]
+    num_activities = {
+        'city': 22,
+        'gender': 3,
+        'registered_via': 6
+    }
+    # continues columns
+    cont_cols_ = ['num_25', 'num_50', 'num_75', 'num_985', 'num_100',
+       'num_unq', 'total_secs', 'num', 'payment_plan_days', 'plan_list_price',
+       'actual_amount_paid', 'is_auto_renew', 'is_cancel',
+       'payment_plan_days_sum', 'actual_amount_paid_sum', 'is_auto_renew_sum',
+       'is_cancel_sum', 'count_sum', 'payment_plan_days_max',
+       'actual_amount_paid_max', 'bd']
+    # sequence columns
+    seq_cols_ = ['num_25', 'num_50', 'num_75', 'num_985', 'num_100',
+       'num_unq', 'total_secs']
+    # non-sequence columns
+    non_seq_cols_ = ['num', 'payment_plan_days', 'plan_list_price',
+       'actual_amount_paid', 'is_auto_renew', 'is_cancel',
+       'payment_plan_days_sum', 'actual_amount_paid_sum', 'is_auto_renew_sum',
+       'is_cancel_sum', 'count_sum', 'payment_plan_days_max',
+       'actual_amount_paid_max', 'city', 'bd', 'gender', 'registered_via']
+    # date column
+    # date_cols = ['days_diff']
+    date_cols = []
+    caspr_factory = CASPRFactory(cat_cols_, num_activities, cont_cols_, seq_cols_, non_seq_cols_, date_cols)
+
+    from caspr.data.load import init_datasets
+    caspr_arch = "TransformerAutoEncoder"
+    hyper_params = dict()
+    output_col = "is_churn"
+    seq_len = 15
+    df_train = pd.read_csv("/home/mi.zhou/shared/MI_ZHOU/transformer/df_train_201702.csv")
+    df_val = pd.read_csv("/home/mi.zhou/shared/MI_ZHOU/transformer/df_val_201702.csv")
+    
+    ds_val = CommonDataset(df_val, seq_cols_, non_seq_cols_, output_col, cat_cols_, cont_cols_, seq_len)
+    ds_train = CommonDataset(df_train, seq_cols_, non_seq_cols_, output_col, cat_cols_, cont_cols_, seq_len)
+    
+    # ds_train = init_datasets(df_train, seq_cols_, non_seq_cols_, output_col, cat_cols_, cont_cols_, seq_len)
+    # ds_val = init_datasets(df_val, seq_cols_, non_seq_cols_, output_col, cat_cols_, cont_cols_, seq_len)
+    criterion = [nn.MSELoss(), nn.CrossEntropyLoss()]
+    num_epochs = 100
+    batch_size = 1024
+    save_path = "./caspr_result.txt"
+
+    train_model_ddp(caspr_factory, caspr_arch, hyper_params, ds_train, ds_val, criterion, num_epochs, batch_size,
+                    save_path)

@@ -94,15 +94,19 @@ class TransformerEncoder(nn.Module): # noqa: W0223  # noqa: W0223
 
         self.register_buffer('scale', torch.sqrt(torch.FloatTensor([hid_dim])))
 
-    def _make_src_mask(self, batch_size, src_len, device):
+    def _make_src_mask(self, batch_size, src_len, device, key_pad_mask):
 
-        src_mask = torch.ones((batch_size, 1, 1, src_len), device=device).bool()
+        # src_mask = torch.ones((batch_size, 1, 1, src_len), device=device).bool()
+        # src_mask = torch.bernoulli(torch.full_like(torch.empty(batch_size, src_len), 1 - 0.3)).unsqueeze(2).expand(-1, -1, 4)
+        # 生成一个(N, S)大小的张量，其中每个元素以mask_prob的概率为1，以1-mask_prob的概率为0
+        src_mask = torch.bernoulli(torch.full_like(torch.empty(batch_size, 1, 1, src_len), 0.7, device=device))
+        src_mask = torch.bitwise_and(src_mask, key_pad_mask)
 
         # src_mask = [batch size, 1, 1, src len]
 
         return src_mask
 
-    def forward(self, src):
+    def forward(self, src, key_pad_mask):
         """Run a forward pass of model over the data."""
 
         # src = [batch size, src len, hid_dim]
@@ -111,7 +115,7 @@ class TransformerEncoder(nn.Module): # noqa: W0223  # noqa: W0223
         src_len = src.shape[1]
         device = src.device
 
-        src_mask = self._make_src_mask(batch_size, src_len, device)
+        src_mask = self._make_src_mask(batch_size, src_len, device, key_pad_mask)
 
         # src_mask = [batch size, src len]
 

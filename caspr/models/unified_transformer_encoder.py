@@ -61,6 +61,10 @@ class UnifiedTransformerEncoder(nn.Module):  # noqa: R0902, W0223
 
         # Linear layers for seq_data
         seq_inp_size = self.emb_seq.emb_size + self.seq_cont_dim
+        # print('self.linear_seq self.emb_seq.emb_size', self.emb_seq.emb_size)
+        # print('self.linear_seq self.seq_cont_dim', self.seq_cont_dim)
+        # print('self.linear_seq seq_inp_size', seq_inp_size)
+        # print('self.linear_seq self.hid_dim', self.hid_dim)
         self.linear_seq = nn.Linear(seq_inp_size, self.hid_dim)
 
         # Linear layers for non_seq_data
@@ -73,6 +77,7 @@ class UnifiedTransformerEncoder(nn.Module):  # noqa: R0902, W0223
         """Run a forward pass of model over the data."""
 
         nonempty_idx = args[-1]
+        key_pad_mask = args[1]
         data_exists = list(map(lambda x: x != -1, nonempty_idx))
         device = args[0].device
         batch_size, seq_len = args[0].shape[:2]
@@ -84,7 +89,11 @@ class UnifiedTransformerEncoder(nn.Module):  # noqa: R0902, W0223
 
         if self.emb_seq and data_exists[SEQ_CAT_INDEX]:
             seq_cat_data = self.emb_seq(seq_cat_data)
+        
         seq_inp = torch.cat((seq_cat_data, seq_cont_data), -1)
+        # print('seq_cat_data.shape', seq_cat_data.shape)
+        # print('seq_cont_data.shape', seq_cont_data.shape)
+        # print('seq_inp.shape', seq_inp.shape)
         seq_inp = self.linear_seq(seq_inp)
 
         if self.emb_non_seq and data_exists[NON_SEQ_CAT_INDEX]:
@@ -96,7 +105,7 @@ class UnifiedTransformerEncoder(nn.Module):  # noqa: R0902, W0223
         src_inp = torch.cat((seq_inp, non_seq_inp), 1) if non_seq_inp.nelement() > 0 else seq_inp
         # src_inp = [batch_size, src len, hid dim]
 
-        enc_src, src_mask = self.transformer_encoder(src_inp)
+        enc_src, src_mask = self.transformer_encoder(src_inp, key_pad_mask)
 
         if self._explain:
             return enc_src.reshape(enc_src.shape[0], -1)

@@ -8,6 +8,7 @@ from torch.utils.data.dataloader import default_collate
 class CommonDataset(torch.utils.data.Dataset):
     def __init__(self, df, seq_cols, non_seq_cols, output_col, cat_cols, cont_cols, time_steps, tgt_id=[]):
         self.len = df.shape[0]
+        self.time_steps = time_steps
         self.seq_cols = seq_cols if seq_cols else []
 
         self.non_seq_cols = non_seq_cols
@@ -17,12 +18,12 @@ class CommonDataset(torch.utils.data.Dataset):
         self.seq_catX = torch.tensor(df[[item for item in seq_cols if item in cat_cols]].values, dtype=torch.long)
 
         self.seq_contX = self.seq_contX.reshape(
-            (self.seq_contX.shape[0], int(self.seq_contX.shape[1]/time_steps), time_steps))
-        self.seq_contX = self.seq_contX.permute(0, 2, 1)
+            (int(self.seq_contX.shape[0]/time_steps), time_steps, self.seq_contX.shape[1]))
+        # self.seq_contX = self.seq_contX.permute(0, 2, 1)
 
         self.seq_catX = self.seq_catX.reshape(
-            (self.seq_catX.shape[0], int(self.seq_catX.shape[1]/time_steps), time_steps))
-        self.seq_catX = self.seq_catX.permute(0, 2, 1)
+            (int(self.seq_catX.shape[0]/time_steps), time_steps, self.seq_catX.shape[1]))
+        # self.seq_catX = self.seq_catX.permute(0, 2, 1)
 
         self.non_seq_catX = torch.tensor(
             df[[item for item in non_seq_cols if item in cat_cols]].values, dtype=torch.long)
@@ -32,6 +33,8 @@ class CommonDataset(torch.utils.data.Dataset):
         self.y = torch.tensor(df[output_col].values, dtype=torch.float32)
 
         self.tgt_id = df[tgt_id].values
+        print("self.tgt_id.shape, self.y.shape, self.seq_catX.shape, self.seq_contX.shape, self.non_seq_catX.shape, self.non_seq_contX.shape")
+        print(self.tgt_id.shape, self.y.shape, self.seq_catX.shape, self.seq_contX.shape, self.non_seq_catX.shape, self.non_seq_contX.shape)
 
     @classmethod
     def for_inference(cls, continuous: pd.Series, categorical: pd.Series, seq_cols, non_seq_cols, cat_cols, cont_cols, time_steps):
@@ -42,7 +45,9 @@ class CommonDataset(torch.utils.data.Dataset):
         return cls(df, seq_cols, non_seq_cols, [], cat_cols, cont_cols, time_steps, tgt_id=[])
 
     def __getitem__(self, index):
-        return [self.tgt_id[index], self.y[index], self.seq_catX[index], self.seq_contX[index], self.non_seq_catX[index], self.non_seq_contX[index]]
+        if index >= self.seq_catX.shape[0]:
+            index = index % self.seq_catX.shape[0]
+        return [self.tgt_id[index * self.time_steps], self.y[index * self.time_steps], self.seq_catX[index], self.seq_contX[index], self.non_seq_catX[index * self.time_steps], self.non_seq_contX[index * self.time_steps]]
 
     def __len__(self):
         return self.len

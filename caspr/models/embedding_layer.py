@@ -32,6 +32,7 @@ class CategoricalEmbedding(nn.Module):  # noqa: W0223
 
         self.emb_dims = emb_dims
         self.is_seq = is_seq
+        # print('self.emb_dims: ', emb_dims)
         self.emb_layers = nn.ModuleList([nn.Embedding(x, y) for x, y in emb_dims])
         if pretrained_vecs is not None and len(emb_dims) > 0:
             for i, v in enumerate(pretrained_vecs):
@@ -45,6 +46,10 @@ class CategoricalEmbedding(nn.Module):  # noqa: W0223
         """Run a forward pass of model over the data."""
         cat_data = cat_data.long()
         # across all rows and column i - useful for batches
+        # for i, emb_layer in enumerate(self.emb_layers):
+        #     print('CategoricalEmbedding forward', i)
+        #     print('CategoricalEmbedding cat_data', cat_data[..., i].shape, cat_data[..., i].max(), cat_data[..., i].min())
+        #     print('CategoricalEmbedding emb_layer', type(emb_layer))
         cat_inp = [emb_layer(cat_data[..., i]) for i, emb_layer in enumerate(self.emb_layers)]
         cat_inp = torch.cat(cat_inp, -1)
         cat_inp = self.emb_dropout_layer(cat_inp)

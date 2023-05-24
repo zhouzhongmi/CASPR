@@ -244,7 +244,7 @@ class TransformerAutoEncoder(nn.Module):  # noqa: W0223
 
         return outputs, attention
 
-    def run(self, y, seq_cat_data, seq_cont_data, non_seq_cat_data, non_seq_cont_data, criterion):  # noqa: R0913
+    def run(self, y, seq_cat_data, seq_cont_data, non_seq_cat_data, non_seq_cont_data, criterion, pad_mask):  # noqa: R0913
         """Run model on data and propagate loss.
 
         Args:
@@ -257,7 +257,7 @@ class TransformerAutoEncoder(nn.Module):  # noqa: W0223
         """
         data = (seq_cat_data, seq_cont_data, non_seq_cat_data, non_seq_cont_data)
         nonempty_tensors, nonempty_idx = get_nonempty_tensors(data)
-        outputs, _ = self(*nonempty_tensors, nonempty_idx)
+        outputs, _ = self(*nonempty_tensors, pad_mask, nonempty_idx)
 
         losses = []
 
