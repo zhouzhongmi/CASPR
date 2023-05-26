@@ -287,12 +287,13 @@ def train_model_ddp(caspr_factory : CASPRFactory, caspr_arch : str, hyper_params
         logger.warn("DDP mode disabled. Training on %s..." % device)
         model = caspr_factory.create(caspr_arch, device=device, **hyper_params)
         
-        init_model_encoder_param_file = f"/home/{jhub_user}/shared/MI_ZHOU/transformer/CASPR/raw_model/caspr_transformer_nopadmask_test_r0_encoder_params"
-        model.unified_encoder.load_state_dict(torch.load(init_model_encoder_param_file))
-        logger.info('init transformer encoder with param: %s' % init_model_encoder_param_file)
+        # init_model_encoder_param_file = f"/home/{jhub_user}/shared/MI_ZHOU/transformer/CASPR/raw_model/caspr_transformer_nopadmask_test_r0_encoder_params"
+        # model.unified_encoder.load_state_dict(torch.load(init_model_encoder_param_file))
+        # logger.info('init transformer encoder with param: %s' % init_model_encoder_param_file)
         
-        # init_model_param_file = f"/home/{jhub_user}/shared/MI_ZHOU/transformer/CASPR/raw_model/caspr_transformer_paper_v2_1m_unmask_churn"
-        # model.load_state_dict(torch.load(init_model_param_file))
+        init_model_param_file = f"/home/{jhub_user}/shared/MI_ZHOU/transformer/CASPR/raw_model/Churn_freeze_encoder_param_W_r0"
+        model.load_state_dict(torch.load(init_model_param_file))
+        logger.info('init transformer with param: %s' % init_model_param_file)
         
         train_loader, val_loader = init_loaders(ds_train, ds_val, batch_size, num_workers=STD_LOAD_WORKERS)
         return train_model(model, criterion, num_epochs, train_loader, val_loader, device, save_path, lr, **kwargs)
@@ -378,11 +379,12 @@ if __name__ == '__main__':
     criterion = nn.CrossEntropyLoss(class_weights)
     num_epochs = 500
     batch_size = 10240
-    save_path = "./raw_model/Churn_freeze_encoder_param_W_r0"
+    save_path = "./raw_model/Churn_freeze_encoder_param_W_r1"
     
-    init_model_encoder_param_file = f"/home/{jhub_user}/shared/MI_ZHOU/transformer/CASPR/raw_model/caspr_transformer_nopadmask_test_r0_encoder_params"
+    # init_model_encoder_param_file = f"/home/{jhub_user}/shared/MI_ZHOU/transformer/CASPR/raw_model/caspr_transformer_nopadmask_test_r0_encoder_params"
+    init_model_param_file = f"/home/{jhub_user}/shared/MI_ZHOU/transformer/CASPR/raw_model/Churn_freeze_encoder_param_W_r0"
     
-    logger.info('train model %s with init transformer encoder with param: %s' % (save_path, init_model_encoder_param_file))
+    logger.info('train model %s with init transformer with param: %s' % (save_path, init_model_param_file))
     logger.info('class_weights: %s' % str(class_weights))
     
     fix_module_names = [
