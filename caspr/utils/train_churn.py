@@ -373,14 +373,17 @@ if __name__ == '__main__':
     ds_val = CommonDataset(df_val, seq_cols_, non_seq_cols_, output_col, cat_cols_, cont_cols_, seq_len)
     ds_train = CommonDataset(df_train, seq_cols_, non_seq_cols_, output_col, cat_cols_, cont_cols_, seq_len)
     
-    criterion = nn.CrossEntropyLoss()
-    num_epochs = 100
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    class_weights = torch.tensor([1/50, 1]).to(device)
+    criterion = nn.CrossEntropyLoss(class_weights)
+    num_epochs = 500
     batch_size = 10240
-    save_path = "./raw_model/Churn_freeze_encoder_param_r0"
+    save_path = "./raw_model/Churn_freeze_encoder_param_W_r0"
     
     init_model_encoder_param_file = f"/home/{jhub_user}/shared/MI_ZHOU/transformer/CASPR/raw_model/caspr_transformer_nopadmask_test_r0_encoder_params"
     
     logger.info('train model %s with init transformer encoder with param: %s' % (save_path, init_model_encoder_param_file))
+    logger.info('class_weights: %s' % str(class_weights))
     
     fix_module_names = [
         'unified_encoder', 

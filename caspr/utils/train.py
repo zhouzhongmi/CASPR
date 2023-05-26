@@ -370,10 +370,18 @@ if __name__ == '__main__':
     ds_val = CommonDataset(df_val, seq_cols_, non_seq_cols_, output_col, cat_cols_, cont_cols_, seq_len)
     ds_train = CommonDataset(df_train, seq_cols_, non_seq_cols_, output_col, cat_cols_, cont_cols_, seq_len)
     
+    # device = "cuda" if torch.cuda.is_available() else "cpu"
+    # class_weights = torch.tensor([1/50, 1]).to(device)
+    
     criterion = [nn.MSELoss(), nn.CrossEntropyLoss()]
     num_epochs = 1000
     batch_size = 20480
     save_path = "./raw_model/caspr_transformer_nopadmask_test_r0"
+    
+    init_model_param_file = f"/home/{jhub_user}/shared/MI_ZHOU/transformer/CASPR/raw_model/caspr_transformer_nopadmask_test_r0"
+    
+    logger.info('train model %s with init transformer with param: %s' % (save_path, init_model_param_file))
+    # logger.info('class_weights: %s' % str(class_weights))
 
     train_model_ddp(caspr_factory, caspr_arch, hyper_params, ds_train, ds_val, criterion, num_epochs, batch_size,
                     save_path)
