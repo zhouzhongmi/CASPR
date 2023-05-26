@@ -6,7 +6,7 @@ import torch.nn as nn
 from caspr.models.dense_bn_dropout import DenseBnDropout
 from caspr.models.lstm_decoder import LSTM_attention_embedding_decoder
 from caspr.models.model_wrapper import LSTMAutoencoder, OutputLayer, TransformerAutoEncoder, TransformerChurnModel
-from caspr.models.transformer import TransformerDecoder, TransformerEncoder
+from caspr.models.transformer import TransformerDecoder, TransformerEncoder, NoMaskTransformerEncoder
 from caspr.models.mlp import MLP
 from caspr.models.unified_encoder import UnifiedEncoder
 from caspr.models.unified_transformer_encoder import UnifiedTransformerEncoder
@@ -109,19 +109,19 @@ class CASPRFactory:
 
         return TransformerAutoEncoder(unified_transformer_encoder, dec, output_layer).to(device)
     
-    def __create_churn_transformer_autoencoder__(self, device="cuda", HIDDEN_SIZE=64,
-                                           NUM_LAYERS_ENC=4,
-                                           NUM_LAYERS_DEC=2,
-                                           NUM_HEADS_ENC=2,
-                                           NUM_HEADS_DEC=4,
+    def __create_churn_transformer_autoencoder__(self, device="cuda", HIDDEN_SIZE=16,
+                                           NUM_LAYERS_ENC=6,
+                                           NUM_LAYERS_DEC=6,
+                                           NUM_HEADS_ENC=8,
+                                           NUM_HEADS_DEC=8,
                                            PF_DIM_ENC=32,
-                                           PF_DIM_DEC=128,
+                                           PF_DIM_DEC=32,
                                            DROPOUT_ENC=0.1,
                                            DROPOUT_DEC=0.1,
                                            EMBEDDING_DROPOUT_SEQUENTIAL=0.1,
                                            EMBEDDING_DROPOUT_NON_SEQUENTIAL=0.1) -> TransformerAutoEncoder:
 
-        enc = TransformerEncoder(hid_dim=HIDDEN_SIZE, n_layers=NUM_LAYERS_ENC, n_heads=NUM_HEADS_ENC,
+        enc = NoMaskTransformerEncoder(hid_dim=HIDDEN_SIZE, n_layers=NUM_LAYERS_ENC, n_heads=NUM_HEADS_ENC,
                                  pf_dim=PF_DIM_ENC, dropout=DROPOUT_ENC, max_length=self.adjust_seq_len)
 
         mlp = MLP(input_size=HIDDEN_SIZE*(self.seq_len+1), lin_layer_sizes=[64, 64], lin_layer_dropouts=[0.1, 0.1], output_size=2, use_softmax=True)

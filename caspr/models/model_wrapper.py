@@ -226,9 +226,9 @@ class TransformerAutoEncoder(nn.Module):  # noqa: W0223
         self.decoder = decoder
         self.output_layer = output_layer
 
-    def forward(self, *args):
+    def forward(self, key_pad_mask=None, *args):
         """Run a forward pass of model over the data."""
-        enc_src, src_mask, src_inp = self.unified_encoder(*args)
+        enc_src, src_mask, src_inp = self.unified_encoder(key_pad_mask, *args)
         batch_size, _, hid_dim = src_inp.shape
         device = src_inp.device
         # enc_src = [batch size, src len, hid dim]
@@ -257,7 +257,8 @@ class TransformerAutoEncoder(nn.Module):  # noqa: W0223
         """
         data = (seq_cat_data, seq_cont_data, non_seq_cat_data, non_seq_cont_data)
         nonempty_tensors, nonempty_idx = get_nonempty_tensors(data)
-        outputs, _ = self(*nonempty_tensors, pad_mask, nonempty_idx)
+        # print('pad_mask.shape 3: ', pad_mask.shape)
+        outputs, _ = self(pad_mask, *nonempty_tensors, nonempty_idx)
 
         losses = []
 
@@ -291,14 +292,14 @@ class TransformerChurnModel(nn.Module):  # noqa: W0223
         self.unified_encoder = unified_encoder
         self.mlp = mlp
 
-    def forward(self, *args):
+    def forward(self, key_pad_mask=None, *args):
         """Run a forward pass of model over the data."""
-        enc_src, _, _ = self.unified_encoder(*args)
+        enc_src, _, _ = self.unified_encoder(key_pad_mask, *args)
         enc_src = enc_src.view(enc_src.shape[0], -1)
         y_pred = self.mlp(enc_src)
         return y_pred
 
-    def run(self, y, seq_cat_data, seq_cont_data, non_seq_cat_data, non_seq_cont_data, criterion):  # noqa: R0913
+    def run(self, y, seq_cat_data, seq_cont_data, non_seq_cat_data, non_seq_cont_data, criterion, pad_mask):  # noqa: R0913
         """Run model on data and propagate loss.
 
         Args:
@@ -311,8 +312,8 @@ class TransformerChurnModel(nn.Module):  # noqa: W0223
         """
         data = (seq_cat_data, seq_cont_data, non_seq_cat_data, non_seq_cont_data)
         nonempty_tensors, nonempty_idx = get_nonempty_tensors(data)
-        y_pred = self(*nonempty_tensors, nonempty_idx)
-        # print("type(y_pred), type(y): ", type(y_pred), type(y))
+        y_pred = self(pad_mask, *nonempty_tensors, nonempty_idx)
+        # print("type(y_pred), type(y), type(y.long()): ", type(y_pred), type(y), type(y.long()))
         # if type(y_pred) == 'list':
         #     print("len(y_pred): ", len(y_pred))
         # else:

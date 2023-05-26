@@ -30,7 +30,7 @@ DDP_MASTER_PORT = "12355"
 DDP_LOAD_WORKERS = 1
 STD_LOAD_WORKERS = 0
 
-Log = XLogger("caspr_train.log", level='info')
+Log = XLogger("caspr_train_churn.log", level='info')
 logger = Log.logger
 
 
@@ -139,7 +139,7 @@ def run_epoch(model, epoch, dataloader, criterion, device, optimizer=None, is_tr
     return y_labels, y_preds, mean_loss
 
 
-def init_lr_schedulers(optimizer, warmup_epochs, reduce_mode='min', reduce_factor=0.35, reduce_patience=4, verbose=True):
+def init_lr_schedulers(optimizer, warmup_epochs, reduce_mode='min', reduce_factor=0.1, reduce_patience=4, verbose=True):
     """
     Training batch size grows proportionally with training distribution, mandating upscaling of the learning rate, which in turn reduces the probability of finding the global optimum.
     This function initializes learning rate schedulers for a given optimizer to facilitate dynamic adjustment (reduction) of learning rate during training.
@@ -165,6 +165,7 @@ def train_model(model, criterion, num_epochs, dataloader_train, dataloader_val, 
                 param.requires_grad = False
             module.eval()
 
+    # print('type(lr), lr: ', type(lr), lr)
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
 
     scheduler_wu, scheduler_re = init_lr_schedulers(optimizer, warmup_epochs, reduce_patience=int(patience/2), verbose=verbose)
@@ -285,10 +286,14 @@ def train_model_ddp(caspr_factory : CASPRFactory, caspr_arch : str, hyper_params
         device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.warn("DDP mode disabled. Training on %s..." % device)
         model = caspr_factory.create(caspr_arch, device=device, **hyper_params)
-        init_model_param_file = f"/home/{jhub_user}/shared/MI_ZHOU/transformer/CASPR/raw_model/caspr_transformer_nopadmask_test_r0"
         
-        logger.info('init transformer with param: %s' % init_model_param_file)
-        model.load_state_dict(torch.load(init_model_param_file))
+        init_model_encoder_param_file = f"/home/{jhub_user}/shared/MI_ZHOU/transformer/CASPR/raw_model/caspr_transformer_nopadmask_test_r0_encoder_params"
+        model.unified_encoder.load_state_dict(torch.load(init_model_encoder_param_file))
+        logger.info('init transformer encoder with param: %s' % init_model_encoder_param_file)
+        
+        # init_model_param_file = f"/home/{jhub_user}/shared/MI_ZHOU/transformer/CASPR/raw_model/caspr_transformer_paper_v2_1m_unmask_churn"
+        # model.load_state_dict(torch.load(init_model_param_file))
+        
         train_loader, val_loader = init_loaders(ds_train, ds_val, batch_size, num_workers=STD_LOAD_WORKERS)
         return train_model(model, criterion, num_epochs, train_loader, val_loader, device, save_path, lr, **kwargs)
 
@@ -352,28 +357,133 @@ if __name__ == '__main__':
            'num_985_min', 'num_100_sum', 'num_100_stddev', 'num_100_avg',
            'num_100_max', 'num_100_min', 'num_unq_sum', 'num_unq_stddev',
            'num_unq_avg', 'num_unq_max', 'num_unq_min', 'bd', 'gap_days']
-    output_col = "is_churn"
     date_cols = []
-    seq_len = 15
+    output_col = "is_churn"
     
     caspr_factory = CASPRFactory(cat_cols_, num_activities, cont_cols_, seq_cols_, non_seq_cols_, date_cols)
 
     from caspr.data.load import init_datasets
-    caspr_arch = "TransformerAutoEncoder"
+    caspr_arch = "TransformerChurnModel"
     hyper_params = dict()
     
+    seq_len = 15
     df_train = pd.read_csv(f"/home/{jhub_user}/shared/MI_ZHOU/transformer/data/df_train_v2_fix_201610_201702_nomask.csv")
     df_val = pd.read_csv(f"/home/{jhub_user}/shared/MI_ZHOU/transformer/data/df_val_v2_fix_201610_201702_nomask.csv")
-    # df_train = pd.read_csv(f"/home/{jhub_user}/shared/MI_ZHOU/transformer/data/df_train_v2_fix_201610_201702.csv")
-    # df_val = pd.read_csv(f"/home/{jhub_user}/shared/MI_ZHOU/transformer/data/df_val_v2_fix_201610_201702.csv")
     
     ds_val = CommonDataset(df_val, seq_cols_, non_seq_cols_, output_col, cat_cols_, cont_cols_, seq_len)
     ds_train = CommonDataset(df_train, seq_cols_, non_seq_cols_, output_col, cat_cols_, cont_cols_, seq_len)
     
-    criterion = [nn.MSELoss(), nn.CrossEntropyLoss()]
-    num_epochs = 1000
-    batch_size = 20480
-    save_path = "./raw_model/caspr_transformer_nopadmask_test_r0"
+    criterion = nn.CrossEntropyLoss()
+    num_epochs = 100
+    batch_size = 10240
+    save_path = "./raw_model/Churn_freeze_encoder_param_r0"
+    
+    init_model_encoder_param_file = f"/home/{jhub_user}/shared/MI_ZHOU/transformer/CASPR/raw_model/caspr_transformer_nopadmask_test_r0_encoder_params"
+    
+    logger.info('train model %s with init transformer encoder with param: %s' % (save_path, init_model_encoder_param_file))
+    
+    fix_module_names = [
+        'unified_encoder', 
+        'unified_encoder.emb_non_seq',
+        'unified_encoder.emb_non_seq.emb_layers',
+        'unified_encoder.emb_non_seq.emb_layers.0',
+        'unified_encoder.emb_non_seq.emb_layers.1',
+        'unified_encoder.emb_non_seq.emb_layers.2',
+        'unified_encoder.emb_non_seq.emb_dropout_layer',
+        'unified_encoder.emb_seq',
+        'unified_encoder.emb_seq.emb_layers',
+        'unified_encoder.emb_seq.emb_dropout_layer',
+        'unified_encoder.linear_seq',
+        'unified_encoder.linear_non_seq',
+        'unified_encoder.transformer_encoder',
+        'unified_encoder.transformer_encoder.pos_embedding',
+        'unified_encoder.transformer_encoder.layers',
+        'unified_encoder.transformer_encoder.layers.0',
+        'unified_encoder.transformer_encoder.layers.0.self_attn_layer_norm',
+        'unified_encoder.transformer_encoder.layers.0.ff_layer_norm',
+        'unified_encoder.transformer_encoder.layers.0.self_attention',
+        'unified_encoder.transformer_encoder.layers.0.self_attention.fc_q',
+        'unified_encoder.transformer_encoder.layers.0.self_attention.fc_k',
+        'unified_encoder.transformer_encoder.layers.0.self_attention.fc_v',
+        'unified_encoder.transformer_encoder.layers.0.self_attention.fc_o',
+        'unified_encoder.transformer_encoder.layers.0.self_attention.dropout',
+        'unified_encoder.transformer_encoder.layers.0.positionwise_feedforward',
+        'unified_encoder.transformer_encoder.layers.0.positionwise_feedforward.fc_1',
+        'unified_encoder.transformer_encoder.layers.0.positionwise_feedforward.fc_2',
+        'unified_encoder.transformer_encoder.layers.0.positionwise_feedforward.dropout',
+        'unified_encoder.transformer_encoder.layers.0.dropout',
+        'unified_encoder.transformer_encoder.layers.1',
+        'unified_encoder.transformer_encoder.layers.1.self_attn_layer_norm',
+        'unified_encoder.transformer_encoder.layers.1.ff_layer_norm',
+        'unified_encoder.transformer_encoder.layers.1.self_attention',
+        'unified_encoder.transformer_encoder.layers.1.self_attention.fc_q',
+        'unified_encoder.transformer_encoder.layers.1.self_attention.fc_k',
+        'unified_encoder.transformer_encoder.layers.1.self_attention.fc_v',
+        'unified_encoder.transformer_encoder.layers.1.self_attention.fc_o',
+        'unified_encoder.transformer_encoder.layers.1.self_attention.dropout',
+        'unified_encoder.transformer_encoder.layers.1.positionwise_feedforward',
+        'unified_encoder.transformer_encoder.layers.1.positionwise_feedforward.fc_1',
+        'unified_encoder.transformer_encoder.layers.1.positionwise_feedforward.fc_2',
+        'unified_encoder.transformer_encoder.layers.1.positionwise_feedforward.dropout',
+        'unified_encoder.transformer_encoder.layers.1.dropout',
+        'unified_encoder.transformer_encoder.layers.2',
+        'unified_encoder.transformer_encoder.layers.2.self_attn_layer_norm',
+        'unified_encoder.transformer_encoder.layers.2.ff_layer_norm',
+        'unified_encoder.transformer_encoder.layers.2.self_attention',
+        'unified_encoder.transformer_encoder.layers.2.self_attention.fc_q',
+        'unified_encoder.transformer_encoder.layers.2.self_attention.fc_k',
+        'unified_encoder.transformer_encoder.layers.2.self_attention.fc_v',
+        'unified_encoder.transformer_encoder.layers.2.self_attention.fc_o',
+        'unified_encoder.transformer_encoder.layers.2.self_attention.dropout',
+        'unified_encoder.transformer_encoder.layers.2.positionwise_feedforward',
+        'unified_encoder.transformer_encoder.layers.2.positionwise_feedforward.fc_1',
+        'unified_encoder.transformer_encoder.layers.2.positionwise_feedforward.fc_2',
+        'unified_encoder.transformer_encoder.layers.2.positionwise_feedforward.dropout',
+        'unified_encoder.transformer_encoder.layers.2.dropout',
+        'unified_encoder.transformer_encoder.layers.3',
+        'unified_encoder.transformer_encoder.layers.3.self_attn_layer_norm',
+        'unified_encoder.transformer_encoder.layers.3.ff_layer_norm',
+        'unified_encoder.transformer_encoder.layers.3.self_attention',
+        'unified_encoder.transformer_encoder.layers.3.self_attention.fc_q',
+        'unified_encoder.transformer_encoder.layers.3.self_attention.fc_k',
+        'unified_encoder.transformer_encoder.layers.3.self_attention.fc_v',
+        'unified_encoder.transformer_encoder.layers.3.self_attention.fc_o',
+        'unified_encoder.transformer_encoder.layers.3.self_attention.dropout',
+        'unified_encoder.transformer_encoder.layers.3.positionwise_feedforward',
+        'unified_encoder.transformer_encoder.layers.3.positionwise_feedforward.fc_1',
+        'unified_encoder.transformer_encoder.layers.3.positionwise_feedforward.fc_2',
+        'unified_encoder.transformer_encoder.layers.3.positionwise_feedforward.dropout',
+        'unified_encoder.transformer_encoder.layers.3.dropout',
+        'unified_encoder.transformer_encoder.layers.4',
+        'unified_encoder.transformer_encoder.layers.4.self_attn_layer_norm',
+        'unified_encoder.transformer_encoder.layers.4.ff_layer_norm',
+        'unified_encoder.transformer_encoder.layers.4.self_attention',
+        'unified_encoder.transformer_encoder.layers.4.self_attention.fc_q',
+        'unified_encoder.transformer_encoder.layers.4.self_attention.fc_k',
+        'unified_encoder.transformer_encoder.layers.4.self_attention.fc_v',
+        'unified_encoder.transformer_encoder.layers.4.self_attention.fc_o',
+        'unified_encoder.transformer_encoder.layers.4.self_attention.dropout',
+        'unified_encoder.transformer_encoder.layers.4.positionwise_feedforward',
+        'unified_encoder.transformer_encoder.layers.4.positionwise_feedforward.fc_1',
+        'unified_encoder.transformer_encoder.layers.4.positionwise_feedforward.fc_2',
+        'unified_encoder.transformer_encoder.layers.4.positionwise_feedforward.dropout',
+        'unified_encoder.transformer_encoder.layers.4.dropout',
+        'unified_encoder.transformer_encoder.layers.5',
+        'unified_encoder.transformer_encoder.layers.5.self_attn_layer_norm',
+        'unified_encoder.transformer_encoder.layers.5.ff_layer_norm',
+        'unified_encoder.transformer_encoder.layers.5.self_attention',
+        'unified_encoder.transformer_encoder.layers.5.self_attention.fc_q',
+        'unified_encoder.transformer_encoder.layers.5.self_attention.fc_k',
+        'unified_encoder.transformer_encoder.layers.5.self_attention.fc_v',
+        'unified_encoder.transformer_encoder.layers.5.self_attention.fc_o',
+        'unified_encoder.transformer_encoder.layers.5.self_attention.dropout',
+        'unified_encoder.transformer_encoder.layers.5.positionwise_feedforward',
+        'unified_encoder.transformer_encoder.layers.5.positionwise_feedforward.fc_1',
+        'unified_encoder.transformer_encoder.layers.5.positionwise_feedforward.fc_2',
+        'unified_encoder.transformer_encoder.layers.5.positionwise_feedforward.dropout',
+        'unified_encoder.transformer_encoder.layers.5.dropout',
+        'unified_encoder.transformer_encoder.dropout'
+       ]
 
     train_model_ddp(caspr_factory, caspr_arch, hyper_params, ds_train, ds_val, criterion, num_epochs, batch_size,
-                    save_path)
+                    save_path, fix_module_names=fix_module_names)

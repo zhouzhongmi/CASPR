@@ -96,11 +96,106 @@ class TransformerEncoder(nn.Module): # noqa: W0223  # noqa: W0223
 
     def _make_src_mask(self, batch_size, src_len, device, key_pad_mask):
 
-        # src_mask = torch.ones((batch_size, 1, 1, src_len), device=device).bool()
+        # src_mask_old = torch.ones((batch_size, 1, 1, src_len), device=device).bool()
         # src_mask = torch.bernoulli(torch.full_like(torch.empty(batch_size, src_len), 1 - 0.3)).unsqueeze(2).expand(-1, -1, 4)
+        
+        # comment
         # 生成一个(N, S)大小的张量，其中每个元素以mask_prob的概率为1，以1-mask_prob的概率为0
-        src_mask = torch.bernoulli(torch.full_like(torch.empty(batch_size, 1, 1, src_len), 0.7, device=device))
+        src_mask = torch.bernoulli(torch.full_like(torch.empty(batch_size, 1, 1, src_len), 0.7, device=device)).byte()
+        
+        # print('src_mask_old.shape, src_mask.shape, key_pad_mask.shape: ', src_mask_old.shape, src_mask.shape, key_pad_mask.shape)
+        # print('src_mask_old.type, src_mask.type, key_pad_mask.type: ', src_mask_old.type(), src_mask.type(), key_pad_mask.type())
+        # comment
         src_mask = torch.bitwise_and(src_mask, key_pad_mask)
+        
+        # 训练Churn模型时不需要30%随机mask
+        # src_mask = key_pad_mask.clone()
+
+        # src_mask = [batch size, 1, 1, src len]
+
+        return src_mask
+
+    def forward(self, src, key_pad_mask):
+        """Run a forward pass of model over the data."""
+
+        # src = [batch size, src len, hid_dim]
+
+        batch_size = src.shape[0]
+        src_len = src.shape[1]
+        device = src.device
+
+        src_mask = self._make_src_mask(batch_size, src_len, device, key_pad_mask)
+
+        # src_mask = [batch size, src len]
+
+        pos = torch.arange(0, src_len).unsqueeze(0).repeat(batch_size, 1).to(device)
+
+        # pos = [batch size, src len]
+
+        src = self.dropout(src * self.scale + self.pos_embedding(pos))
+
+        # src = [batch size, src len, hid dim]
+
+        for layer in self.layers:
+            src = layer(src, src_mask)
+
+        # src = [batch size, src len, hid dim]
+        # src_mask = [batch size, 1, 1, src len]
+
+        return src, src_mask
+    
+    
+class NoMaskTransformerEncoder(nn.Module): # noqa: W0223  # noqa: W0223
+    """TransformerEncoder is a stack of N encoder layers.
+
+    Args:
+        hid_dim: the hidden size of the encoder.
+        n_layers: the number of sub-encoder-layers in the encoder
+        n_heads: the number of heads in the multi-head attention layers
+        pf_dim: the dimension of the feedforward network model
+        dropout: the dropout value
+        device: the device on which the model is running
+        max_length: the maximum length of the input sequence
+    """
+
+    def __init__(self,  # noqa: R0913
+                 hid_dim,
+                 n_layers,
+                 n_heads,
+                 pf_dim,
+                 dropout,
+                 max_length=100):
+        """Initialize model with params."""
+        super().__init__()
+
+        self.pos_embedding = nn.Embedding(max_length, hid_dim)
+
+        self.layers = nn.ModuleList([TransformerEncoderLayer(hid_dim,
+                                                             n_heads,
+                                                             pf_dim,
+                                                             dropout)
+                                     for _ in range(n_layers)])
+
+        self.dropout = nn.Dropout(dropout)
+
+        self.register_buffer('scale', torch.sqrt(torch.FloatTensor([hid_dim])))
+
+    def _make_src_mask(self, batch_size, src_len, device, key_pad_mask):
+
+        # src_mask_old = torch.ones((batch_size, 1, 1, src_len), device=device).bool()
+        # src_mask = torch.bernoulli(torch.full_like(torch.empty(batch_size, src_len), 1 - 0.3)).unsqueeze(2).expand(-1, -1, 4)
+        
+        # comment
+        # 生成一个(N, S)大小的张量，其中每个元素以mask_prob的概率为1，以1-mask_prob的概率为0
+        # src_mask = torch.bernoulli(torch.full_like(torch.empty(batch_size, 1, 1, src_len), 0.7, device=device)).byte()
+        
+        # print('src_mask_old.shape, src_mask.shape, key_pad_mask.shape: ', src_mask_old.shape, src_mask.shape, key_pad_mask.shape)
+        # print('src_mask_old.type, src_mask.type, key_pad_mask.type: ', src_mask_old.type(), src_mask.type(), key_pad_mask.type())
+        # comment
+        # src_mask = torch.bitwise_and(src_mask, key_pad_mask)
+        
+        # 训练Churn模型时不需要30%随机mask
+        src_mask = key_pad_mask.clone()
 
         # src_mask = [batch size, 1, 1, src len]
 
